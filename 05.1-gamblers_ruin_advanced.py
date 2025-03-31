@@ -1,6 +1,6 @@
 import random
 
-def calculate_bet(current_money, goal, strategy="fixed", base_bet=10, losing_streak=0, win_probability=0.5):
+def calculate_bet(current_money, goal, strategy="fixed", base_bet=10, max_bet=10000, losing_streak=0, win_probability=0.5):
     """
     Calculate bet amount based on different strategies
     
@@ -16,23 +16,23 @@ def calculate_bet(current_money, goal, strategy="fixed", base_bet=10, losing_str
     int: Amount to bet
     """
     if strategy == "fixed":
-        return min(base_bet, current_money)
+        return min(base_bet, current_money, max_bet)
     
     #elif strategy == "percentage":
      #   return max(1, int(current_money * 0.1))
     
     elif strategy == "martingale":
-        return base_bet
+        return min(base_bet, max_bet)
     
     elif strategy == "inverse_p":
         # Increase bet by factor of 1/p for each loss in the streak
         multiplier = (1 / win_probability) ** losing_streak
-        return min(int(base_bet * multiplier), current_money)
+        return min(int(base_bet * multiplier), current_money, max_bet)
     
     return base_bet
 
 def simulate_gamblers_ruin(initial_money, goal, strategy="fixed", base_bet=10, 
-                          win_probability=0.5, max_loan=0):
+                          win_probability=0.5, max_loan=0, max_bet = 10000):
     """
     Simulates the Gambler's Ruin problem with variable betting and loan capability
     
@@ -43,6 +43,7 @@ def simulate_gamblers_ruin(initial_money, goal, strategy="fixed", base_bet=10,
     base_bet (int): Base betting amount
     win_probability (float): The probability of winning each game (between 0 and 1)
     max_loan (int): Maximum loan amount available when broke (0 means no loans)
+    max_bet (int): Maximum bet amount
     
     Returns:
     tuple: (bool, int, list, int) - (Whether gambler won, Number of games, History of money, Final debt)
@@ -50,7 +51,7 @@ def simulate_gamblers_ruin(initial_money, goal, strategy="fixed", base_bet=10,
     current_money = initial_money
     num_games = 0
     money_history = [current_money]
-    current_bet = base_bet
+    current_bet = min(base_bet, max_bet)
     debt = 0
     losing_streak = 0
     
@@ -66,10 +67,10 @@ def simulate_gamblers_ruin(initial_money, goal, strategy="fixed", base_bet=10,
         if strategy == "martingale":
             bet_amount = min(current_bet, current_money)
         elif strategy == "inverse_p":
-            bet_amount = calculate_bet(current_money, goal, strategy, base_bet, 
+            bet_amount = calculate_bet(current_money, goal, strategy, base_bet, max_bet, 
                                     losing_streak, win_probability)
         else:
-            bet_amount = calculate_bet(current_money, goal, strategy, base_bet)
+            bet_amount = calculate_bet(current_money, goal, strategy, base_bet, max_bet)
         
         # If can't place minimum bet, game over
         if bet_amount <= 0:
@@ -81,7 +82,7 @@ def simulate_gamblers_ruin(initial_money, goal, strategy="fixed", base_bet=10,
             # Win
             current_money += bet_amount
             if strategy == "martingale":
-                current_bet = base_bet  # Reset to base bet after win
+                current_bet = min(base_bet, max_bet)  # Reset to base bet after win
             losing_streak = 0  # Reset losing streak
         else:
             # Lose
@@ -94,7 +95,7 @@ def simulate_gamblers_ruin(initial_money, goal, strategy="fixed", base_bet=10,
     
     return current_money >= goal, num_games, money_history, debt
 
-def run_simulation_set(strategy, initial_money, goal, base_bet, win_probability, max_loan, num_trials=1):
+def run_simulation_set(strategy, initial_money, goal, base_bet, win_probability, max_loan, max_bet, num_trials=1):
     """
     Run multiple trials of a simulation with given parameters
     
@@ -120,7 +121,8 @@ def run_simulation_set(strategy, initial_money, goal, base_bet, win_probability,
             strategy=strategy, 
             base_bet=base_bet, 
             win_probability=win_probability,
-            max_loan=max_loan
+            max_loan=max_loan,
+            max_bet=10000
         )
         wins += 1 if won else 0
         total_games += games
@@ -153,29 +155,52 @@ def main():
         # Run without loans
         no_loan_results = run_simulation_set(
             strategy, initial_money, goal, base_bet, 
-            win_probability, max_loan=0, num_trials=num_trials
+            win_probability, max_loan=0, max_bet=10000, num_trials=num_trials
         )
-        
+
+        # Run without loans and with binding max bet
+        max_bet_results = run_simulation_set(
+            strategy, initial_money, goal, base_bet, 
+            win_probability, max_loan=0, max_bet=50, num_trials=num_trials
+        )
+
         # Run with loans
         with_loan_results = run_simulation_set(
             strategy, initial_money, goal, base_bet, 
-            win_probability, max_loan=max_loan, num_trials=num_trials
+            win_probability, max_loan=max_loan, max_bet=10000, num_trials=num_trials
         )
         
+        # Run with loans and with binding max bet
+        max_bet_loan_results = run_simulation_set(
+            strategy, initial_money, goal, base_bet, 
+            win_probability, max_loan=max_loan, max_bet=50, num_trials=num_trials
+        )
+
         # Print comparison
         print("\nWithout loans:")
         print(f"Win rate: {no_loan_results['win_rate']:.1%}")
         print(f"Average games played: {no_loan_results['avg_games']:.1f}")
         print(f"Average final debt: ${no_loan_results['avg_debt']:.2f}")
+
+        print("\nWithout loans and with binding max bet:")
+        print(f"Win rate: {max_bet_results['win_rate']:.1%}")
+        print(f"Average games played: {max_bet_results['avg_games']:.1f}")
+        print(f"Average final debt: ${max_bet_results['avg_debt']:.2f}")
         
         print("\nWith ${} loan available:".format(max_loan))
         print(f"Win rate: {with_loan_results['win_rate']:.1%}")
         print(f"Average games played: {with_loan_results['avg_games']:.1f}")
         print(f"Average final debt: ${with_loan_results['avg_debt']:.2f}")
+
+        print("\nWith ${} loan available and binding max bet:".format(max_loan))
+        print(f"Win rate: {max_bet_loan_results['win_rate']:.1%}")
+        print(f"Average games played: {max_bet_loan_results['avg_games']:.1f}")
+        print(f"Average final debt: ${max_bet_loan_results['avg_debt']:.2f}")
         
         # Calculate the difference
         win_rate_change = with_loan_results['win_rate'] - no_loan_results['win_rate']
-        print(f"\nDifference in win rate: {win_rate_change:+.1%}")
-
+        print(f"\nDifference in win rate (Loans): {win_rate_change:+.1%}")
+        print(f"Difference in win rate (Max bet, no loans): {max_bet_results['win_rate'] - no_loan_results['win_rate']:+.1%}")
+        print(f"Difference in win rate (Max bet, loans): {max_bet_loan_results['win_rate'] - with_loan_results['win_rate']:+.1%}")
 if __name__ == "__main__":
     main() 
